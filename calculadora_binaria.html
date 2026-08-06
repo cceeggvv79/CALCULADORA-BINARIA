@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora</title>
+<style>
+  :root{
+    --bg:#0d1210;
+    --panel:#141b19;
+    --panel-line:#26332f;
+    --amber:#ffb020;
+    --green:#3ddc84;
+    --text:#dbe6e0;
+    --muted:#7b8b85;
+    --red:#ff5c5c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 50% -10%, #1a2420 0%, var(--bg) 60%);
+    font-family:'Courier New', ui-monospace, monospace;
+    color:var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .panel{
+    width:100%;
+    max-width:460px;
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:6px;
+    box-shadow:0 0 0 1px #000, 0 20px 60px -20px rgba(0,0,0,.7), inset 0 1px 0 #2a3733;
+    padding:22px 22px 26px;
+  }
+  .header{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    border-bottom:1px dashed var(--panel-line);
+    padding-bottom:12px;
+    margin-bottom:18px;
+  }
+  h1{
+    font-size:15px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin:0;
+  }
+  .header span{
+    font-size:10px;
+    color:var(--muted);
+    letter-spacing:.1em;
+  }
+  label{
+    display:block;
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:5px;
+  }
+  .row{ margin-bottom:14px; }
+  .row.two{ display:flex; gap:12px; }
+  .row.two > div{ flex:1; }
+  input, select{
+    width:100%;
+    background:#0a0f0d;
+    border:1px solid var(--panel-line);
+    border-radius:3px;
+    color:var(--green);
+    font-family:inherit;
+    font-size:15px;
+    padding:9px 10px;
+    outline:none;
+  }
+  select{ cursor:pointer; }
+  input:focus, select:focus{ border-color:var(--amber); }
+  #bits{
+    letter-spacing:3px;
+    font-size:17px;
+  }
+  #bits.err{ color:var(--red); border-color:var(--red); }
+  .display{
+    margin-top:18px;
+    background:#0a0f0d;
+    border:1px solid var(--panel-line);
+    border-radius:4px;
+    padding:16px;
+    text-align:center;
+  }
+  .display .val{
+    font-size:34px;
+    color:var(--amber);
+    text-shadow:0 0 12px rgba(255,176,32,.35);
+    min-height:40px;
+    line-height:40px;
+  }
+  .display .unit{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:4px;
+    letter-spacing:.08em;
+  }
+  .sub{
+    font-size:10px;
+    color:var(--muted);
+    margin-top:6px;
+    letter-spacing:.05em;
+  }
+  .foot{
+    margin-top:14px;
+    font-size:10px;
+    color:var(--muted);
+    text-align:center;
+    letter-spacing:.05em;
+  }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <div class="header">
+    <h1>Conversor </h1>
+  </div>
+
+  <div class="row two">
+    <div>
+      <label for="res">Resolucion</label>
+      <input id="res" type="number" step="any"  inputmode="decimal">
+    </div>
+    <div>
+      <label for="unit">Unidad</label>
+      <select id="unit">
+        <option value="PSI">PSI</option>
+        <option value="°" >°</option>
+        <option value="lbs" selected>lbs</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="bits">Codigo binario </label>
+    <input id="bits" type="text" placeholder="0000 0000 0000" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div class="display">
+    <div class="val" id="result">—</div>
+    <div class="unit" id="unitLabel"></div>
+    <div class="sub" id="detail"></div>
+  </div>
+
+</div>
+
+<script>
+// Cantidad de bits del parametro. Todos los parametros de esta tabla usan 12
+// (1 bit de signo + 11 bits de magnitud), asi que queda fijo aqui
+const BITS = 12;
+
+const $res = document.getElementById('res');
+const $unit = document.getElementById('unit');
+const $bits = document.getElementById('bits');
+const $result = document.getElementById('result');
+const $unitLabel = document.getElementById('unitLabel');
+const $detail = document.getElementById('detail');
+
+// Toma lo que el usuario escribio, se queda solo con 0 y 1, lo recorta a
+// 12 caracteres, y lo vuelve a mostrar agrupado de 4 en 4 (solo para que
+// sea mas facil de leer ej: "0000 0011 1001")
+function formatGroups(digits){
+  let out = '';
+  for(let i=0;i<digits.length;i++){
+    if(i>0 && i%4===0) out += ' ';
+    out += digits[i];
+  }
+  return out;
+}
+
+// Cada vez que el usuarioi teclea algo en el campo de codigo binario se 
+// limpia el texto, lo reformatea y dispara el calculo
+$bits.addEventListener('input', ()=>{
+  const cursorAtEnd = $bits.selectionStart === $bits.value.length;
+  let digits = $bits.value.replace(/[^01]/g,''); // quita todo lo que no sea 0 o 1
+  digits = digits.slice(0, BITS);                // maximo 12 digitos
+  $bits.value = formatGroups(digits);
+  if(cursorAtEnd) $bits.setSelectionRange($bits.value.length, $bits.value.length);
+  calcular();
+});
+$res.addEventListener('input', calcular);
+$unit.addEventListener('change', calcular);
+
+// Se reemplazan los 12 if del Excel
+//   Primero se lee el codigo binario completo como un solo numero entero
+//   Si el primer bit (el de signo) es 1, se le resta el rango completo
+//   Y ese numero ENTERO se multiplica por la resolucion
+function calcular(){
+  const res = parseFloat($res.value);
+  const digits = $bits.value.replace(/[^01]/g,'');
+  $unitLabel.textContent = $unit.value;
+
+  // Si todavia no hay 12 digitos o la resoluciin no es un nimero valido(0 o 1)
+  // no calcula y avisa cuantos bits faltan.
+  if(digits.length !== BITS || isNaN(res)){
+    $bits.classList.toggle('err', digits.length>0 && digits.length!==BITS);
+    $result.textContent = '—';
+    $detail.textContent = digits.length>0 ? `faltan ${BITS - digits.length} bits` : '';
+    return;
+  }
+  $bits.classList.remove('err');
+
+  // digits[0] = bit 12 / MSB (signo) y  digits[11] = bit 1 / LSB (menos significativo)
+  let intVal = parseInt(digits, 2);   // valor binario sin signo (0 a 4095)
+  const signBit = digits[0] === '1';
+  if(signBit){
+    intVal -= Math.pow(2, BITS);      // complemento a 2: resta 4096 si es negativo
+  }
+  const valor = intVal * res;         // se multiplica a la resolucion
+
+  $result.textContent = (Math.round(valor * 100000) / 100000).toString();
+  $detail.textContent = `entero c2: ${intVal}  ·  ${digits}`;
+}
+
+calcular();
+</script>
+
+</body>
+</html>
